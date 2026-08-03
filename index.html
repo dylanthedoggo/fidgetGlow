@@ -1,12 +1,1625 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Fidget Plane &middot; gravity &amp; light</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fidget Plane · gravity &amp; light</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #07080d; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #cfe6f5; -webkit-font-smoothing: antialiased;
+    user-select: none; -webkit-user-select: none;
+  }
+
+  #stage { position: fixed; inset: 0; display: block; touch-action: none; cursor: crosshair; }
+
+  /* ---------- shared chrome ---------- */
+  .glass {
+    background: rgba(9, 14, 26, 0.72);
+    border: 1px solid rgba(120, 200, 255, 0.16);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+  }
+  button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+
+  #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #ui.hidden { opacity: 0; pointer-events: none !important; }
+  #ui > * { pointer-events: auto; }
+  #ui { transition: opacity .25s ease; }
+
+  /* ---------- toolbar ---------- */
+  #toolbar {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    max-width: calc(100vw - 24px);
+  }
+  .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 8px; }
+  .tool {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    min-width: 62px; padding: 7px 9px 6px; border-radius: 10px;
+    border: 1px solid transparent; transition: all .15s ease;
+    font-size: 10.5px; letter-spacing: .3px; color: #7e93aa;
+  }
+  .tool .ico { font-size: 16px; line-height: 1; color: #9fb6cc; transition: all .15s ease; }
+  .tool:hover { background: rgba(120,200,255,0.08); color: #cfe6f5; }
+  .tool:hover .ico { color: #cfe6f5; }
+  .tool.on { background: rgba(60, 220, 255, 0.14); border-color: rgba(90,230,255,0.5); color: #eafcff; }
+  .tool.on .ico { color: #6ef0ff; text-shadow: 0 0 12px rgba(90,230,255,.9); }
+  .tool .key {
+    position: absolute; top: 3px; right: 5px; font-size: 8.5px; opacity: .45;
+    font-family: ui-monospace, monospace;
+  }
+
+  #submodes { padding: 5px; gap: 4px; display: none; }
+  #submodes.show { display: flex; }
+  .chip {
+    padding: 5px 11px; border-radius: 8px; font-size: 11px; color: #8ba3ba;
+    border: 1px solid rgba(120,200,255,0.14);
+  }
+  .chip:hover { color: #cfe6f5; background: rgba(120,200,255,0.08); }
+  .chip.on { background: rgba(60,220,255,0.16); border-color: rgba(90,230,255,0.45); color: #eafcff; }
+
+  /* ---------- settings panel ---------- */
+  #gear {
+    position: absolute; top: 14px; right: 14px; width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; color: #9fb6cc;
+  }
+  #gear:hover { color: #6ef0ff; }
+  #panel {
+    position: absolute; top: 14px; right: 14px; width: 258px;
+    max-height: calc(100vh - 28px); overflow-y: auto; padding: 14px;
+    display: none;
+  }
+  #panel.show { display: block; }
+  #panel::-webkit-scrollbar { width: 5px; }
+  #panel::-webkit-scrollbar-thumb { background: rgba(120,200,255,.25); border-radius: 3px; }
+  .phead {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #6ef0ff;
+  }
+  .phead button { font-size: 16px; color: #7e93aa; line-height: 1; }
+  .phead button:hover { color: #cfe6f5; }
+  .sect {
+    margin: 14px 0 7px; font-size: 9.5px; letter-spacing: 1.6px; text-transform: uppercase;
+    color: #56708a; border-top: 1px solid rgba(120,200,255,.1); padding-top: 10px;
+  }
+  .sect:first-of-type { border-top: none; margin-top: 4px; padding-top: 0; }
+  .ctl { margin-bottom: 9px; }
+  .ctl label { display: flex; justify-content: space-between; font-size: 11px; color: #93a9c0; margin-bottom: 4px; }
+  .ctl label span { color: #6ef0ff; font-family: ui-monospace, monospace; font-size: 10.5px; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 3px;
+    background: rgba(120,200,255,0.18); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: #6ef0ff; box-shadow: 0 0 10px rgba(90,230,255,.7); cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px; border: none; border-radius: 50%;
+    background: #6ef0ff; box-shadow: 0 0 10px rgba(90,230,255,.7); cursor: pointer;
+  }
+  .seg { display: flex; gap: 4px; }
+  .seg button {
+    flex: 1; padding: 5px 0; font-size: 10.5px; border-radius: 7px; color: #8ba3ba;
+    border: 1px solid rgba(120,200,255,0.14);
+  }
+  .seg button:hover { color: #cfe6f5; background: rgba(120,200,255,.08); }
+  .seg button.on { background: rgba(60,220,255,.16); border-color: rgba(90,230,255,.45); color: #eafcff; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #93a9c0; margin-bottom: 9px; }
+  .sw { width: 34px; height: 18px; border-radius: 10px; background: rgba(120,200,255,.16); position: relative; transition: background .18s; flex: none; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #7e93aa; transition: all .18s; }
+  .sw.on { background: rgba(60,220,255,.32); }
+  .sw.on::after { left: 18px; background: #6ef0ff; box-shadow: 0 0 8px rgba(90,230,255,.8); }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .btns button {
+    padding: 7px 4px; font-size: 10.5px; border-radius: 8px; color: #8ba3ba;
+    border: 1px solid rgba(120,200,255,0.14);
+  }
+  .btns button:hover { color: #eafcff; background: rgba(120,200,255,.1); border-color: rgba(90,230,255,.35); }
+  .btns button.warn:hover { color: #ffd0e4; background: rgba(255,90,170,.12); border-color: rgba(255,90,170,.4); }
+
+  /* ---------- misc ---------- */
+  #stats {
+    position: absolute; top: 14px; left: 14px; padding: 7px 11px; display: none;
+    font-family: ui-monospace, monospace; font-size: 10.5px; color: #6ef0ff; line-height: 1.55;
+  }
+  #stats.show { display: block; }
+  #hint {
+    position: absolute; left: 50%; top: 22px; transform: translateX(-50%);
+    padding: 9px 16px; font-size: 11.5px; color: #8fb8d0; letter-spacing: .3px;
+    text-align: center; transition: opacity .8s ease; max-width: calc(100vw - 120px);
+  }
+  #hint.gone { opacity: 0; pointer-events: none; }
+  #hint b { color: #6ef0ff; font-weight: 600; }
+  #toast {
+    position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%);
+    padding: 8px 16px; font-size: 11.5px; color: #cfe6f5; opacity: 0;
+    transition: opacity .25s ease; pointer-events: none !important;
+  }
+  #toast.show { opacity: 1; }
+
+  @media (max-width: 620px) {
+    .tool { min-width: 52px; font-size: 9.5px; padding: 6px 5px 5px; }
+    .tool .ico { font-size: 14px; }
+    .tool .key { display: none; }
+    #panel { width: calc(100vw - 28px); }
+    #hint { font-size: 10.5px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="ui">
+  <div id="stats"></div>
+
+  <div id="hint" class="glass">
+    <b>Hold and drag</b> to sculpt the light &nbsp;·&nbsp; <b>tap</b> to pin a well &nbsp;·&nbsp; <b>right-drag</b> to push
+    <br><b>H</b> hides everything &nbsp;·&nbsp; <b>1–0</b> picks a tool &nbsp;·&nbsp; <b>Ctrl+Z</b> undoes
+  </div>
+
+  <button id="gear" class="glass" title="Settings">⚙</button>
+
+  <div id="panel" class="glass">
+    <div class="phead"><span>Controls</span><button id="closePanel">×</button></div>
+
+    <div class="sect">Field</div>
+    <div class="ctl"><label>Gravity <span id="v_gravity"></span></label>
+      <input type="range" data-cfg="gravity" min="0" max="2600" step="20"></div>
+    <div class="ctl"><label>Gravity direction <span id="v_gravityAngle"></span></label>
+      <input type="range" data-cfg="gravityAngle" min="0" max="360" step="1"></div>
+    <div class="ctl"><label>Force strength <span id="v_fieldStrength"></span></label>
+      <input type="range" data-cfg="fieldStrength" min="0.2" max="3" step="0.05"></div>
+    <div class="ctl"><label>Air drag <span id="v_damping"></span></label>
+      <input type="range" data-cfg="damping" min="0" max="2.5" step="0.05"></div>
+
+    <div class="sect">Matter</div>
+    <div class="ctl"><label>Particles <span id="v_count"></span></label>
+      <input type="range" data-cfg="count" min="100" max="1300" step="25"></div>
+    <div class="ctl"><label>Bounce <span id="v_bounce"></span></label>
+      <input type="range" data-cfg="bounce" min="0" max="0.95" step="0.01"></div>
+    <div class="ctl"><label>Surface friction <span id="v_friction"></span></label>
+      <input type="range" data-cfg="friction" min="0" max="0.6" step="0.01"></div>
+    <div class="ctl"><label>Edges</label>
+      <div class="seg" id="segBoundary">
+        <button data-b="bounce">Bounce</button><button data-b="wrap">Wrap</button><button data-b="open">Open</button>
+      </div></div>
+
+    <div class="sect">Light</div>
+    <div class="ctl"><label>Trail length <span id="v_trailLen"></span></label>
+      <input type="range" data-cfg="trailLen" min="0" max="32" step="1"></div>
+    <div class="ctl"><label>Ball size <span id="v_glow"></span></label>
+      <input type="range" data-cfg="glow" min="0.5" max="2.2" step="0.05"></div>
+    <div class="toggle"><span>Bloom</span><div class="sw" data-toggle="bloom"></div></div>
+    <div class="toggle"><span>Auto quality</span><div class="sw" data-toggle="autoQuality"></div></div>
+    <div class="toggle"><span>Performance readout</span><div class="sw" data-toggle="showStats"></div></div>
+
+    <div class="sect">Brush</div>
+    <div class="ctl"><label>Size <span id="v_brush"></span></label>
+      <input type="range" data-cfg="brush" min="14" max="240" step="2"></div>
+
+    <div class="sect">Scenes</div>
+    <div class="btns" style="margin-bottom:6px">
+      <button data-preset="funnel">Funnel</button>
+      <button data-preset="orbit">Orbit</button>
+      <button data-preset="waterfall">Waterfall</button>
+      <button data-preset="pinball">Pinball</button>
+    </div>
+    <div class="btns">
+      <button id="clearParticles">Reseed light</button>
+      <button id="clearStructures" class="warn">Clear build</button>
+      <button id="resetAll" class="warn" style="grid-column:1/3">Reset everything</button>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <div id="submodes" class="row glass">
+      <button class="chip" data-sub="solid">Solid</button>
+      <button class="chip" data-sub="attract">Attract</button>
+      <button class="chip" data-sub="repel">Repel</button>
+      <button class="chip" data-sub="vortex">Vortex</button>
+    </div>
+    <div id="tools" class="row glass"></div>
+  </div>
+
+  <div id="toast" class="glass"></div>
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   1. CONFIG & GLOBAL STATE
+   ============================================================ */
+
+const MAXP = 1300;                  // hard particle capacity
+const SUB  = 1 / 120;               // physics substep (s)
+const MAXSUB = 4;                   // substeps per frame ceiling
+const VMAX = 2600;                  // px/s speed clamp
+const VMAX2 = VMAX * VMAX;
+const STORE_KEY = 'fidget-plane-v1';
+const RESIDUE = 'rgba(0,0,0,0.34)';   // per-frame fade under the drawn tails
+
+const DEFAULTS = {
+  count: 1300,
+  gravity: 900,
+  gravityAngle: 90,      // degrees, 90 = down
+  fieldStrength: 1,
+  damping: 0.35,
+  bounce: 0.5,
+  friction: 0.12,
+  boundary: 'bounce',    // bounce | wrap | open
+  trailLen: 14,        // samples of path history drawn behind each ball
+  glow: 1,
+  bloom: false,        // a halo would put the fuzz back around the solid balls
+  brush: 70,
+  showStats: false,
+  autoQuality: true
+};
+const CFG = Object.assign({}, DEFAULTS);
+
+let W = 0, H = 0, DPR = 1;
+let paused = false;
+let frame = 0, tNow = 0;
+
+// ---- scene contents ------------------------------------------------
+let walls = [];      // { id, pts:[x,y,...], closed }
+let fields = [];     // { id, kind:'well'|'poly'|'flow', mode, ... }
+let emitters = [];   // { id, x, y, a, spread, rate, speed, acc }
+let rings = [];      // transient shockwave visuals
+let history = [];    // undo stack of {type, id}
+let nextId = 1;
+
+let structDirty = true;   // static layer needs redraw
+let gridDirty = true;     // force grid needs rebake
+
+/* ============================================================
+   2. CANVAS SETUP
+   ============================================================ */
+
+const stage = document.getElementById('stage');
+const ctx = stage.getContext('2d');
+
+// persistent particle/trail buffer
+const pfx = document.createElement('canvas');
+const pctx = pfx.getContext('2d');
+// cached static structures
+const strc = document.createElement('canvas');
+const sctx = strc.getContext('2d');
+// bloom downsample
+const blm = document.createElement('canvas');
+const bctx = blm.getContext('2d');
+
+let lastW = 0, lastH = 0;
+
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const oldW = lastW, oldH = lastH;
+  W = window.innerWidth; H = window.innerHeight;
+  lastW = W; lastH = H;
+  for (const [cv, cx, scale] of [[stage, ctx, 1], [pfx, pctx, 1], [strc, sctx, 1], [blm, bctx, 0.25]]) {
+    cv.width  = Math.max(1, Math.round(W * DPR * scale));
+    cv.height = Math.max(1, Math.round(H * DPR * scale));
+    cx.setTransform(DPR * scale, 0, 0, DPR * scale, 0, 0);
+  }
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  allocGrid();
+  // keep whatever has been built proportional to the new viewport
+  if (oldW > 1 && oldH > 1 && W > 1 && H > 1 && (oldW !== W || oldH !== H)) {
+    rescaleScene(W / oldW, H / oldH);
+  }
+  structDirty = true; gridDirty = true;
+}
+window.addEventListener('resize', resize);
+
+function rescaleScene(sx, sy) {
+  const sr = Math.min(sx, sy);
+  for (const w of walls) for (let i = 0; i < w.pts.length; i += 2) { w.pts[i] *= sx; w.pts[i + 1] *= sy; }
+  for (const f of fields) {
+    if (f.kind === 'well') { f.x *= sx; f.y *= sy; f.r *= sr; f.cx = f.x; f.cy = f.y; }
+    else {
+      for (let i = 0; i < f.pts.length; i += 2) { f.pts[i] *= sx; f.pts[i + 1] *= sy; }
+      if (f.r) f.r *= sr;
+      const c = polyCentroid(f.pts); f.cx = c[0]; f.cy = c[1]; f.bb = polyBBox(f.pts);
+    }
+  }
+  for (const e of emitters) { e.x *= sx; e.y *= sy; }
+  for (let i = 0; i < n; i++) { PX[i] *= sx; PY[i] *= sy; resetTrail(i); }
+  rebuildSegments();
+}
+
+/* ============================================================
+   3. PARTICLE SYSTEM  (flat arrays, packed [0,n))
+   ============================================================ */
+
+const PX = new Float32Array(MAXP), PY = new Float32Array(MAXP);
+const VX = new Float32Array(MAXP), VY = new Float32Array(MAXP);
+const PC = new Uint8Array(MAXP);      // palette index — fixed per particle, random at spawn
+const PSB = new Uint8Array(MAXP);     // size bucket — gives the field varied ball sizes
+const PL  = new Uint8Array(MAXP);     // per-particle tail length, as a % of the global setting
+
+// Path history for comet tails. One shared write cursor instead of a per-particle
+// array: every particle records one sample per frame, so they all advance together
+// and nothing has to be allocated or shifted.
+const TRAIL_MAX = 32, TRAIL_MASK = 31;   // power of two: ring wrap is a mask, not a division
+const TRX = new Float32Array(MAXP * TRAIL_MAX);
+const TRY = new Float32Array(MAXP * TRAIL_MAX);
+let trailCursor = 0;
+
+// collapse a particle's whole history onto its current spot — used whenever a
+// particle teleports (recycled by an emitter, wrapped, respawned) so its tail
+// doesn't whip across the screen from wherever it used to be
+function resetTrail(i) {
+  const base = i * TRAIL_MAX, x = PX[i], y = PY[i];
+  for (let s = 0; s < TRAIL_MAX; s++) { TRX[base + s] = x; TRY[base + s] = y; }
+}
+
+function rollParticle(i) {
+  PC[i] = (Math.random() * NEON.length) | 0;
+  PSB[i] = (Math.random() * SIZE_BUCKETS) | 0;
+  PL[i] = 45 + (Math.random() * 56) | 0;   // % of the global trail length
+}
+let n = 0;            // live particle count
+let recycle = 0;      // round-robin cursor for emitter reuse
+let autoCap = MAXP;   // ceiling imposed by the auto-quality governor
+
+function targetCount() {
+  const c = Math.min(CFG.count, autoCap, MAXP);
+  return c < 100 ? 100 : c | 0;
+}
+
+function spawnAt(x, y, vx, vy) {
+  let i;
+  if (n < targetCount()) i = n++;
+  else { if (n === 0) return; recycle = (recycle + 1) % n; i = recycle; }
+  PX[i] = x; PY[i] = y; VX[i] = vx; VY[i] = vy;
+  rollParticle(i); resetTrail(i);
+}
+
+function seedParticles() {
+  n = 0;
+  const target = targetCount();
+  for (let i = 0; i < target; i++) {
+    PX[i] = Math.random() * W; PY[i] = Math.random() * H;
+    VX[i] = (Math.random() - 0.5) * 60; VY[i] = (Math.random() - 0.5) * 60;
+    rollParticle(i); resetTrail(i);
+  }
+  n = target;
+}
+
+function ensurePopulation() {
+  const target = targetCount();
+  if (n > target) n = target;
+  while (n < target) {
+    PX[n] = Math.random() * W; PY[n] = Math.random() * H;
+    VX[n] = (Math.random() - 0.5) * 40; VY[n] = (Math.random() - 0.5) * 40;
+    rollParticle(n); resetTrail(n);
+    n++;
+  }
+}
+
+function swirlAll(cx, cy, speed) {
+  for (let i = 0; i < n; i++) {
+    const dx = PX[i] - cx, dy = PY[i] - cy;
+    const d = Math.hypot(dx, dy) || 1;
+    VX[i] = -dy / d * speed; VY[i] = dx / d * speed;
+  }
+}
+
+/* ============================================================
+   4. FORCE GRID  (all placed fields bake into one vector field)
+   ============================================================ */
+
+const GRID = { cs: 14, w: 0, h: 0, ax: null, ay: null, any: false };
+let tmpX = null, tmpY = null, tmpW = null;   // scratch for flow normalisation
+
+function allocGrid() {
+  // never below 2×2 — the bilinear sampler indexes cell+1 and would read
+  // outside the array (→ NaN velocities) on a degenerate viewport
+  GRID.w = Math.max(2, Math.ceil(W / GRID.cs) + 1);
+  GRID.h = Math.max(2, Math.ceil(H / GRID.cs) + 1);
+  const len = GRID.w * GRID.h;
+  GRID.ax = new Float32Array(len); GRID.ay = new Float32Array(len);
+  tmpX = new Float32Array(len); tmpY = new Float32Array(len); tmpW = new Float32Array(len);
+}
+
+// --- geometry helpers ---------------------------------------------
+function pointInPoly(x, y, p) {
+  let inside = false;
+  for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+    const xi = p[i], yi = p[i + 1], xj = p[j], yj = p[j + 1];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+let _pd = 0, _pdx = 0, _pdy = 0;   // out-params for distToPoly
+function distToPoly(x, y, p, closed) {
+  let best = Infinity, bx = 0, by = 0;
+  const last = closed ? p.length : p.length - 2;
+  for (let i = 0; i < last; i += 2) {
+    const ax = p[i], ay = p[i + 1];
+    const j = (i + 2) % p.length;
+    const bx2 = p[j], by2 = p[j + 1];
+    const ex = bx2 - ax, ey = by2 - ay;
+    const L2 = ex * ex + ey * ey;
+    let t = L2 > 0 ? ((x - ax) * ex + (y - ay) * ey) / L2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const qx = ax + ex * t, qy = ay + ey * t;
+    const d = Math.hypot(x - qx, y - qy);
+    if (d < best) { best = d; bx = qx; by = qy; }
+  }
+  _pd = best;
+  const dd = best || 1;
+  _pdx = (bx - x) / dd; _pdy = (by - y) / dd;   // unit vector toward the shape
+  return best;
+}
+
+function polyCentroid(p) {
+  let sx = 0, sy = 0;
+  for (let i = 0; i < p.length; i += 2) { sx += p[i]; sy += p[i + 1]; }
+  return [sx / (p.length / 2), sy / (p.length / 2)];
+}
+
+function polyBBox(p) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < p.length; i += 2) {
+    if (p[i] < x0) x0 = p[i]; if (p[i] > x1) x1 = p[i];
+    if (p[i + 1] < y0) y0 = p[i + 1]; if (p[i + 1] > y1) y1 = p[i + 1];
+  }
+  return [x0, y0, x1, y1];
+}
+
+// --- baking ---------------------------------------------------------
+const FMAG = 2400;   // base acceleration of a field at full strength
+
+function addCell(cx, cy, fx, fy) {
+  if (cx < 0 || cy < 0 || cx >= GRID.w || cy >= GRID.h) return;
+  const k = cy * GRID.w + cx;
+  GRID.ax[k] += fx; GRID.ay[k] += fy;
+}
+
+function modeVector(mode, ux, uy, mag) {
+  // ux,uy = unit vector pointing toward the field's core
+  switch (mode) {
+    case 'attract': return [ux * mag, uy * mag];
+    case 'repel':   return [-ux * mag, -uy * mag];
+    case 'vortex':  return [(-uy * 0.92 + ux * 0.3) * mag, (ux * 0.92 + uy * 0.3) * mag];
+    default:        return [ux * mag, uy * mag];
+  }
+}
+
+function stampWell(f) {
+  const cs = GRID.cs, S = f.strength * CFG.fieldStrength * FMAG;
+  const c0 = Math.floor((f.x - f.r) / cs), c1 = Math.ceil((f.x + f.r) / cs);
+  const r0 = Math.floor((f.y - f.r) / cs), r1 = Math.ceil((f.y + f.r) / cs);
+  for (let cy = r0; cy <= r1; cy++) {
+    for (let cx = c0; cx <= c1; cx++) {
+      const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
+      const dx = f.x - wx, dy = f.y - wy;
+      const d = Math.hypot(dx, dy);
+      if (d > f.r) continue;
+      const fall = 1 - d / f.r;
+      const mag = S * fall * fall * Math.min(1, d / 18);
+      const ux = dx / (d || 1), uy = dy / (d || 1);
+      const v = modeVector(f.mode, ux, uy, mag);
+      addCell(cx, cy, v[0], v[1]);
+    }
+  }
+}
+
+function stampPoly(f) {
+  const cs = GRID.cs, S = f.strength * CFG.fieldStrength * FMAG;
+  const band = 56;
+  const bb = f.bb;
+  const c0 = Math.floor((bb[0] - band) / cs), c1 = Math.ceil((bb[2] + band) / cs);
+  const r0 = Math.floor((bb[1] - band) / cs), r1 = Math.ceil((bb[3] + band) / cs);
+  for (let cy = r0; cy <= r1; cy++) {
+    for (let cx = c0; cx <= c1; cx++) {
+      if (cx < 0 || cy < 0 || cx >= GRID.w || cy >= GRID.h) continue;
+      const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
+      let ux, uy, mag;
+      if (pointInPoly(wx, wy, f.pts)) {
+        const dx = f.cx - wx, dy = f.cy - wy;
+        const d = Math.hypot(dx, dy) || 1;
+        ux = dx / d; uy = dy / d;
+        mag = S * Math.min(1, d / 26);
+      } else {
+        distToPoly(wx, wy, f.pts, true);
+        if (_pd > band) continue;
+        ux = _pdx; uy = _pdy;
+        mag = S * (1 - _pd / band);
+      }
+      const v = modeVector(f.mode, ux, uy, mag);
+      addCell(cx, cy, v[0], v[1]);
+    }
+  }
+}
+
+function stampFlow(f) {
+  const cs = GRID.cs, S = f.strength * CFG.fieldStrength * FMAG * 0.9, r = f.r;
+  const bb = f.bb;
+  const c0 = Math.max(0, Math.floor((bb[0] - r) / cs)), c1 = Math.min(GRID.w - 1, Math.ceil((bb[2] + r) / cs));
+  const r0 = Math.max(0, Math.floor((bb[1] - r) / cs)), r1 = Math.min(GRID.h - 1, Math.ceil((bb[3] + r) / cs));
+  // accumulate direction weighted by proximity, then normalise so overlapping
+  // stroke samples don't multiply into an explosion
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
+    const k = cy * GRID.w + cx; tmpX[k] = 0; tmpY[k] = 0; tmpW[k] = 0;
+  }
+  const p = f.pts;
+  for (let i = 0; i < p.length - 2; i += 2) {
+    const ax = p[i], ay = p[i + 1], bx = p[i + 2], by = p[i + 3];
+    const ex = bx - ax, ey = by - ay;
+    const L = Math.hypot(ex, ey); if (L < 1e-6) continue;
+    const tx = ex / L, ty = ey / L;
+    const sc0 = Math.max(c0, Math.floor((Math.min(ax, bx) - r) / cs));
+    const sc1 = Math.min(c1, Math.ceil((Math.max(ax, bx) + r) / cs));
+    const sr0 = Math.max(r0, Math.floor((Math.min(ay, by) - r) / cs));
+    const sr1 = Math.min(r1, Math.ceil((Math.max(ay, by) + r) / cs));
+    for (let cy = sr0; cy <= sr1; cy++) for (let cx = sc0; cx <= sc1; cx++) {
+      const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
+      let t = ((wx - ax) * ex + (wy - ay) * ey) / (L * L);
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(wx - (ax + ex * t), wy - (ay + ey * t));
+      if (d > r) continue;
+      const w = 1 - d / r;
+      const k = cy * GRID.w + cx;
+      tmpX[k] += tx * w; tmpY[k] += ty * w; tmpW[k] += w;
+    }
+  }
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
+    const k = cy * GRID.w + cx;
+    if (tmpW[k] <= 0) continue;
+    const inv = 1 / tmpW[k];
+    const dx = tmpX[k] * inv, dy = tmpY[k] * inv;
+    const w = Math.min(1, tmpW[k]);
+    GRID.ax[k] += dx * S * w; GRID.ay[k] += dy * S * w;
+  }
+}
+
+function bakeGrid() {
+  GRID.ax.fill(0); GRID.ay.fill(0);
+  for (const f of fields) {
+    if (f.kind === 'well') stampWell(f);
+    else if (f.kind === 'poly') stampPoly(f);
+    else if (f.kind === 'flow') stampFlow(f);
+  }
+  // clamp so stacked fields can't launch particles into orbit
+  const CAP = 9000;
+  for (let k = 0; k < GRID.ax.length; k++) {
+    const m = Math.hypot(GRID.ax[k], GRID.ay[k]);
+    if (m > CAP) { const s = CAP / m; GRID.ax[k] *= s; GRID.ay[k] *= s; }
+  }
+  GRID.any = fields.length > 0;
+  gridDirty = false;
+}
+
+// bilinear sample -> writes to module-scope _fx/_fy (no allocation in hot loop)
+let _fx = 0, _fy = 0;
+function sampleGrid(x, y) {
+  const cs = GRID.cs, gw = GRID.w, gh = GRID.h;
+  let fx = x / cs - 0.5, fy = y / cs - 0.5;
+  let x0 = Math.floor(fx), y0 = Math.floor(fy);
+  const tx = fx - x0, ty = fy - y0;
+  if (x0 < 0) x0 = 0; else if (x0 > gw - 2) x0 = gw - 2;
+  if (y0 < 0) y0 = 0; else if (y0 > gh - 2) y0 = gh - 2;
+  const k00 = y0 * gw + x0, k10 = k00 + 1, k01 = k00 + gw, k11 = k01 + 1;
+  const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+  _fx = GRID.ax[k00] * w00 + GRID.ax[k10] * w10 + GRID.ax[k01] * w01 + GRID.ax[k11] * w11;
+  _fy = GRID.ay[k00] * w00 + GRID.ay[k10] * w10 + GRID.ay[k01] * w01 + GRID.ay[k11] * w11;
+}
+
+/* ============================================================
+   5. STRUCTURES & SWEPT SEGMENT COLLISION
+   ============================================================ */
+
+const HCS = 44;                       // spatial hash cell size
+let SEG = new Float32Array(0);        // x1,y1,x2,y2 per segment
+let segCount = 0;
+let hash = new Map();
+let segStamp = new Int32Array(0);
+let stampGen = 1;
+const cand = new Int32Array(4096);
+let candN = 0;
+const WBB = [0, 0, 0, 0];             // bbox of all walls — cheap early-out per particle
+
+function hkey(cx, cy) { return ((cx * 92837111) ^ (cy * 689287499)) | 0; }
+
+function rebuildSegments() {
+  let total = 0;
+  for (const w of walls) total += (w.pts.length / 2) - (w.closed ? 0 : 1);
+  SEG = new Float32Array(Math.max(4, total * 4));
+  segStamp = new Int32Array(Math.max(1, total));
+  segCount = 0;
+  hash = new Map();
+  for (const w of walls) {
+    const p = w.pts, cnt = p.length / 2;
+    const lim = w.closed ? cnt : cnt - 1;
+    for (let i = 0; i < lim; i++) {
+      const a = i * 2, b = ((i + 1) % cnt) * 2;
+      const s = segCount * 4;
+      SEG[s] = p[a]; SEG[s + 1] = p[a + 1]; SEG[s + 2] = p[b]; SEG[s + 3] = p[b + 1];
+      // register in every cell of its bbox (over-inclusive broadphase is fine)
+      const c0 = Math.floor(Math.min(p[a], p[b]) / HCS), c1 = Math.floor(Math.max(p[a], p[b]) / HCS);
+      const r0 = Math.floor(Math.min(p[a + 1], p[b + 1]) / HCS), r1 = Math.floor(Math.max(p[a + 1], p[b + 1]) / HCS);
+      for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
+        const k = hkey(cx, cy);
+        let arr = hash.get(k);
+        if (!arr) { arr = []; hash.set(k, arr); }
+        arr.push(segCount);
+      }
+      segCount++;
+    }
+  }
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let s = 0; s < segCount * 4; s += 4) {
+    if (SEG[s] < x0) x0 = SEG[s]; if (SEG[s] > x1) x1 = SEG[s];
+    if (SEG[s + 2] < x0) x0 = SEG[s + 2]; if (SEG[s + 2] > x1) x1 = SEG[s + 2];
+    if (SEG[s + 1] < y0) y0 = SEG[s + 1]; if (SEG[s + 1] > y1) y1 = SEG[s + 1];
+    if (SEG[s + 3] < y0) y0 = SEG[s + 3]; if (SEG[s + 3] > y1) y1 = SEG[s + 3];
+  }
+  WBB[0] = x0 - 2; WBB[1] = y0 - 2; WBB[2] = x1 + 2; WBB[3] = y1 + 2;
+}
+
+function gatherSegs(minx, miny, maxx, maxy) {
+  candN = 0;
+  if (!segCount) return;
+  stampGen++;
+  const c0 = Math.floor(minx / HCS), c1 = Math.floor(maxx / HCS);
+  const r0 = Math.floor(miny / HCS), r1 = Math.floor(maxy / HCS);
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
+    const arr = hash.get(hkey(cx, cy));
+    if (!arr) continue;
+    for (let i = 0; i < arr.length; i++) {
+      const s = arr[i];
+      if (segStamp[s] === stampGen) continue;
+      segStamp[s] = stampGen;
+      if (candN < cand.length) cand[candN++] = s;
+    }
+  }
+}
+
+// returns t in [0,1] along the motion vector, or -1
+function segHit(px, py, dx, dy, ax, ay, bx, by) {
+  const ex = bx - ax, ey = by - ay;
+  const den = dx * ey - dy * ex;
+  if (den > -1e-12 && den < 1e-12) return -1;
+  const qx = ax - px, qy = ay - py;
+  const t = (qx * ey - qy * ex) / den;
+  if (t < 0 || t > 1) return -1;
+  const u = (qx * dy - qy * dx) / den;
+  if (u < 0 || u > 1) return -1;
+  return t;
+}
+
+function moveParticle(i, dt) {
+  let x = PX[i], y = PY[i], vx = VX[i], vy = VY[i];
+  let rem = dt, guard = 0;
+  while (rem > 1e-7 && guard++ < 3) {
+    const dx = vx * rem, dy = vy * rem;
+    let bt = 2, bs = -1;
+    const ex = x + dx, ey = y + dy;
+    const mnx = (x < ex ? x : ex) - 1, mxx = (x < ex ? ex : x) + 1;
+    const mny = (y < ey ? y : ey) - 1, mxy = (y < ey ? ey : y) + 1;
+    // most particles are nowhere near anything solid — skip the broadphase entirely
+    if (segCount && mxx >= WBB[0] && mnx <= WBB[2] && mxy >= WBB[1] && mny <= WBB[3]) {
+      gatherSegs(mnx, mny, mxx, mxy);
+      for (let k = 0; k < candN; k++) {
+        const s = cand[k] * 4;
+        const t = segHit(x, y, dx, dy, SEG[s], SEG[s + 1], SEG[s + 2], SEG[s + 3]);
+        if (t >= 0 && t < bt) { bt = t; bs = s; }
+      }
+    }
+    if (bs < 0) { x += dx; y += dy; break; }
+    x += dx * bt; y += dy * bt;
+    let nx = -(SEG[bs + 3] - SEG[bs + 1]), ny = (SEG[bs + 2] - SEG[bs]);
+    const L = Math.hypot(nx, ny) || 1; nx /= L; ny /= L;
+    if (nx * vx + ny * vy > 0) { nx = -nx; ny = -ny; }
+    const vn = vx * nx + vy * ny;
+    const fr = 1 - CFG.friction;
+    vx = (vx - vn * nx) * fr - vn * nx * CFG.bounce;
+    vy = (vy - vn * ny) * fr - vn * ny * CFG.bounce;
+    x += nx * 0.7; y += ny * 0.7;
+    rem *= (1 - bt);
+  }
+  PX[i] = x; PY[i] = y; VX[i] = vx; VY[i] = vy;
+}
+
+/* ============================================================
+   6. SIMULATION STEP
+   ============================================================ */
+
+const pointer = { down: false, x: 0, y: 0, px: 0, py: 0, button: 0, id: -1 };
+let liveForce = null;   // {x,y,mode,r} applied analytically each frame
+
+function physics(dt) {
+  const ga = CFG.gravityAngle * Math.PI / 180;
+  const gx = Math.cos(ga) * CFG.gravity, gy = Math.sin(ga) * CFG.gravity;
+  const damp = Math.exp(-CFG.damping * dt);
+  const useGrid = GRID.any;
+
+  const lf = liveForce;
+  const lr = lf ? lf.r : 0, lr2 = lr * lr;
+  const lS = lf ? CFG.fieldStrength * FMAG * 1.5 : 0;
+
+  for (let i = 0; i < n; i++) {
+    let ax = gx, ay = gy;
+
+    if (useGrid) { sampleGrid(PX[i], PY[i]); ax += _fx; ay += _fy; }
+
+    if (lf) {
+      const dx = lf.x - PX[i], dy = lf.y - PY[i];
+      const d2 = dx * dx + dy * dy;
+      if (d2 < lr2) {
+        const d = Math.sqrt(d2) || 1;
+        const fall = 1 - d / lr;
+        const mag = lS * fall * fall * Math.min(1, d / 16);
+        const ux = dx / d, uy = dy / d;
+        if (lf.mode === 'attract') { ax += ux * mag; ay += uy * mag; }
+        else if (lf.mode === 'repel') { ax -= ux * mag; ay -= uy * mag; }
+        else { ax += (-uy * 0.95 + ux * 0.25) * mag; ay += (ux * 0.95 + uy * 0.25) * mag; }
+      }
+    }
+
+    let vx = (VX[i] + ax * dt) * damp;
+    let vy = (VY[i] + ay * dt) * damp;
+    const s2 = vx * vx + vy * vy;             // squared compare keeps the sqrt off the hot path
+    if (s2 > VMAX2) { const s = VMAX / Math.sqrt(s2); vx *= s; vy *= s; }
+    VX[i] = vx; VY[i] = vy;
+
+    moveParticle(i, dt);
+
+    // boundaries
+    let x = PX[i], y = PY[i];
+    if (CFG.boundary === 'bounce') {
+      const b = CFG.bounce, f = 1 - CFG.friction;
+      if (x < 0)      { PX[i] = 0;     VX[i] = Math.abs(VX[i]) * b; VY[i] *= f; }
+      else if (x > W) { PX[i] = W;     VX[i] = -Math.abs(VX[i]) * b; VY[i] *= f; }
+      if (y < 0)      { PY[i] = 0;     VY[i] = Math.abs(VY[i]) * b; VX[i] *= f; }
+      else if (y > H) { PY[i] = H;     VY[i] = -Math.abs(VY[i]) * b; VX[i] *= f; }
+    } else if (CFG.boundary === 'wrap') {
+      let jumped = false;
+      if (x < 0) { PX[i] = x + W; jumped = true; } else if (x > W) { PX[i] = x - W; jumped = true; }
+      if (y < 0) { PY[i] = y + H; jumped = true; } else if (y > H) { PY[i] = y - H; jumped = true; }
+      if (jumped) resetTrail(i);
+    } else { // open — recycle back in from the far edge
+      if (x < -40 || x > W + 40 || y < -40 || y > H + 40) {
+        const ga2 = CFG.gravityAngle * Math.PI / 180;
+        const ex = -Math.cos(ga2), ey = -Math.sin(ga2);   // upstream of gravity
+        PX[i] = W * 0.5 + ex * W * 0.55 + (Math.random() - 0.5) * W * 0.9;
+        PY[i] = H * 0.5 + ey * H * 0.55 + (Math.random() - 0.5) * H * 0.9;
+        PX[i] = Math.max(2, Math.min(W - 2, PX[i]));
+        PY[i] = Math.max(2, Math.min(H - 2, PY[i]));
+        VX[i] = 0; VY[i] = 0;
+        resetTrail(i);
+      }
+    }
+  }
+
+  // emitters
+  for (const e of emitters) {
+    e.acc += e.rate * dt;
+    while (e.acc >= 1) {
+      e.acc -= 1;
+      const a = e.a + (Math.random() - 0.5) * e.spread;
+      const sp = e.speed * (0.7 + Math.random() * 0.6);
+      spawnAt(e.x + (Math.random() - 0.5) * 4, e.y + (Math.random() - 0.5) * 4,
+              Math.cos(a) * sp, Math.sin(a) * sp);
+    }
+  }
+}
+
+function shockwave(x, y, r, power) {
+  const r2 = r * r;
+  for (let i = 0; i < n; i++) {
+    const dx = PX[i] - x, dy = PY[i] - y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > r2) continue;
+    const d = Math.sqrt(d2) || 1;
+    const f = (1 - d / r) * power;
+    VX[i] += dx / d * f; VY[i] += dy / d * f;
+  }
+  rings.push({ x, y, r, t: 0 });
+}
+
+/* ============================================================
+   7. RENDERING
+   ============================================================ */
+
+// the reference file's PALETTE, exactly: [120,220,255] [80,190,255] [200,120,255]
+// [255,120,200] [120,255,200] [255,200,80]
+const NEON = [
+  '#78dcff', // light blue
+  '#50beff', // blue
+  '#c878ff', // purple
+  '#ff78c8', // pink
+  '#78ffc8', // mint
+  '#ffc850'  // amber
+];
+// varied ball sizes, quantised into buckets so heads stay cheap pre-rendered blits
+const SIZE_BUCKETS = 6, SIZE_MIN = 1.3, SIZE_MAX = 3.0;
+let sprites = [], spriteHalf = [], TRAIL_RGBA = [];
+
+function buildSprites() {
+  sprites = []; spriteHalf = [];
+  for (let c = 0; c < NEON.length; c++) {
+    for (let b = 0; b < SIZE_BUCKETS; b++) {
+      const R = Math.max(0.8, (SIZE_MIN + (SIZE_MAX - SIZE_MIN) * (b + 0.5) / SIZE_BUCKETS) * CFG.glow);
+      const S = Math.ceil(R * 2) + 2;      // +2 keeps the antialiased rim inside
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = S;
+      const g = cv.getContext('2d');
+      g.fillStyle = NEON[c];
+      g.beginPath(); g.arc(S / 2, S / 2, R, 0, Math.PI * 2); g.fill();
+      sprites.push(cv); spriteHalf.push(S / 2);
+    }
+  }
+  // built once, never per frame — tails are far fainter than the heads
+  TRAIL_RGBA = NEON.map(hex => hexA(hex, 0.26));
+}
+
+// matched to the reference file's Well colours: gravity 80,200,255 · repel
+// 255,80,120 · vortex 180,120,255. Flow and solid borrow from the palette.
+const FCOLOR = {
+  attract: '#50c8ff', repel: '#ff5078', vortex: '#b478ff', flow: '#78ffc8', solid: '#78dcff'
+};
+
+function drawStructures() {
+  sctx.clearRect(0, 0, W, H);
+
+  // field bodies
+  for (const f of fields) {
+    const col = FCOLOR[f.mode] || FCOLOR.attract;
+    sctx.save();
+    if (f.kind === 'well') {
+      const g = sctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
+      g.addColorStop(0, hexA(col, 0.24)); g.addColorStop(0.6, hexA(col, 0.06)); g.addColorStop(1, hexA(col, 0));
+      sctx.fillStyle = g;
+      sctx.beginPath(); sctx.arc(f.x, f.y, f.r, 0, 7); sctx.fill();
+    } else if (f.kind === 'poly') {
+      sctx.beginPath(); polyPath(sctx, f.pts, true);
+      sctx.fillStyle = hexA(col, 0.09); sctx.fill();
+    } else if (f.kind === 'flow') {
+      sctx.beginPath(); polyPath(sctx, f.pts, false);
+      sctx.strokeStyle = hexA(col, 0.10);
+      sctx.lineWidth = f.r * 2; sctx.lineCap = 'round'; sctx.lineJoin = 'round';
+      sctx.stroke();
+    }
+    sctx.restore();
+  }
+
+  // walls, with glow
+  if (walls.length) {
+    sctx.save();
+    sctx.lineCap = 'round'; sctx.lineJoin = 'round';
+    sctx.shadowColor = 'rgba(90,200,255,0.85)'; sctx.shadowBlur = 14;
+    sctx.strokeStyle = 'rgba(150,225,255,0.75)'; sctx.lineWidth = 2.4;
+    for (const w of walls) { sctx.beginPath(); polyPath(sctx, w.pts, w.closed); sctx.stroke(); }
+    sctx.shadowBlur = 0;
+    sctx.strokeStyle = 'rgba(235,252,255,0.95)'; sctx.lineWidth = 1;
+    for (const w of walls) { sctx.beginPath(); polyPath(sctx, w.pts, w.closed); sctx.stroke(); }
+    sctx.restore();
+  }
+  structDirty = false;
+}
+
+function polyPath(c, p, closed) {
+  c.moveTo(p[0], p[1]);
+  for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]);
+  if (closed) c.closePath();
+}
+
+function hexA(hex, a) {
+  const v = parseInt(hex.slice(1), 16);
+  return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`;
+}
+
+function render(dt) {
+  // ---- particles onto the persistent trail buffer ----
+  // light residue under the explicit tails, so the stroke ends soften instead of
+  // stopping dead at the oldest sample
+  pctx.globalCompositeOperation = 'destination-out';
+  pctx.fillStyle = RESIDUE;
+  pctx.fillRect(0, 0, W, H);
+
+  // record one path sample per particle per frame, then advance the shared cursor
+  for (let i = 0; i < n; i++) {
+    const k = i * TRAIL_MAX + trailCursor;
+    TRX[k] = PX[i]; TRY[k] = PY[i];
+  }
+  const newest = trailCursor;
+  trailCursor = (trailCursor + 1) & TRAIL_MASK;
+
+  // source-over, not lighter: overlapping balls should occlude each other and
+  // keep their own colour rather than summing toward white
+  pctx.globalCompositeOperation = 'source-over';
+
+  // --- comet tails: one batched path per colour, so 9 strokes cover every particle
+  const L = Math.min(CFG.trailLen | 0, TRAIL_MAX);
+  if (L >= 2) {
+    const paths = [];
+    for (let c = 0; c < NEON.length; c++) paths.push(new Path2D());
+    for (let i = 0; i < n; i++) {
+      let Li = (L * PL[i] / 100) | 0;          // each ball keeps its own tail length
+      if (Li < 2) Li = 2;
+      const base = i * TRAIL_MAX;
+      const p = paths[PC[i]];
+      let idx = (newest - Li + 1 + TRAIL_MAX) & TRAIL_MASK;
+      p.moveTo(TRX[base + idx], TRY[base + idx]);
+      for (let s = 1; s < Li; s++) {
+        idx = (idx + 1) & TRAIL_MASK;
+        p.lineTo(TRX[base + idx], TRY[base + idx]);
+      }
+    }
+    pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+    pctx.lineWidth = Math.max(0.6, 1.3 * CFG.glow);
+    for (let c = 0; c < NEON.length; c++) {
+      pctx.strokeStyle = TRAIL_RGBA[c];
+      pctx.stroke(paths[c]);
+    }
+  }
+
+  // --- heads, bright and solid, on top of their own tail
+  for (let i = 0; i < n; i++) {
+    const k = PC[i] * SIZE_BUCKETS + PSB[i];
+    const h = spriteHalf[k];
+    pctx.drawImage(sprites[k], PX[i] - h, PY[i] - h);
+  }
+
+  // ---- compose ----
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#07080d';
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(pfx, 0, 0, W, H);
+
+  if (CFG.bloom) {
+    bctx.globalCompositeOperation = 'copy';
+    bctx.filter = 'blur(2.5px)';
+    bctx.drawImage(pfx, 0, 0, W, H);
+    bctx.filter = 'none';
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.75;
+    ctx.drawImage(blm, 0, 0, W, H);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  if (structDirty) drawStructures();
+  ctx.drawImage(strc, 0, 0, W, H);
+
+  drawOverlay(dt);
+}
+
+function drawOverlay(dt) {
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  // animated field outlines
+  ctx.setLineDash([7, 7]);
+  ctx.lineDashOffset = -(tNow * 0.03) % 14;
+  for (const f of fields) {
+    const col = FCOLOR[f.mode] || FCOLOR.attract;
+    ctx.strokeStyle = hexA(col, 0.55); ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    if (f.kind === 'well') ctx.arc(f.x, f.y, f.r, 0, 7);
+    else polyPath(ctx, f.pts, f.kind === 'poly');
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // field cores
+  for (const f of fields) {
+    const col = FCOLOR[f.mode] || FCOLOR.attract;
+    const cx = f.kind === 'well' ? f.x : f.cx, cy = f.kind === 'well' ? f.y : f.cy;
+    if (f.kind === 'flow') continue;
+    const pulse = 2.6 + Math.sin(tNow * 0.004) * 0.9;
+    ctx.fillStyle = hexA(col, 0.9);
+    ctx.beginPath(); ctx.arc(cx, cy, pulse, 0, 7); ctx.fill();
+  }
+
+  // emitters
+  for (const e of emitters) {
+    ctx.strokeStyle = 'rgba(120,255,190,0.8)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(e.x, e.y, 7, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(e.x, e.y);
+    ctx.lineTo(e.x + Math.cos(e.a) * 22, e.y + Math.sin(e.a) * 22); ctx.stroke();
+    ctx.fillStyle = 'rgba(150,255,205,0.95)';
+    ctx.beginPath(); ctx.arc(e.x, e.y, 2.4, 0, 7); ctx.fill();
+  }
+
+  // shockwave rings
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i];
+    r.t += dt * 2.6;
+    if (r.t >= 1) { rings.splice(i, 1); continue; }
+    ctx.strokeStyle = `rgba(255,190,120,${(1 - r.t) * 0.7})`;
+    ctx.lineWidth = 2.5 * (1 - r.t) + 0.5;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r * (0.2 + r.t * 0.9), 0, 7); ctx.stroke();
+  }
+
+  // in-progress stroke
+  if (draft && draft.length >= 4) {
+    const col = tool === 'wall' ? FCOLOR.solid
+              : tool === 'shape' ? (FCOLOR[submode] || FCOLOR.solid)
+              : FCOLOR.flow;
+    ctx.strokeStyle = hexA(col, 0.9); ctx.lineWidth = tool === 'flow' ? 2 : 2.2;
+    ctx.beginPath(); polyPath(ctx, draft, false); ctx.stroke();
+    if (tool === 'shape' && draft.length >= 6) {
+      ctx.setLineDash([4, 6]); ctx.strokeStyle = hexA(col, 0.35); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(draft[draft.length - 2], draft[draft.length - 1]);
+      ctx.lineTo(draft[0], draft[1]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    if (tool === 'flow') {
+      ctx.strokeStyle = hexA(FCOLOR.flow, 0.12); ctx.lineWidth = CFG.brush * 2;
+      ctx.beginPath(); polyPath(ctx, draft, false); ctx.stroke();
+    }
+  }
+
+  // emitter aim preview
+  if (aim) {
+    ctx.strokeStyle = 'rgba(120,255,190,0.7)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(aim.x, aim.y); ctx.lineTo(pointer.x, pointer.y); ctx.stroke();
+  }
+
+  // cursor brush
+  if (!uiHidden) {
+    const showRing = ['attract', 'repel', 'vortex', 'erase', 'blast', 'flow', 'grab'].includes(tool);
+    if (showRing) {
+      const r = tool === 'blast' ? CFG.brush * 2.4 : CFG.brush;
+      const col = tool === 'erase' ? '#ff5078'
+                : tool === 'blast' ? '#ffc850'
+                : (FCOLOR[tool] || '#78dcff');
+      ctx.strokeStyle = hexA(col, pointer.down ? 0.65 : 0.28);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(pointer.x, pointer.y, r, 0, 7); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/* ============================================================
+   8. MAIN LOOP
+   ============================================================ */
+
+let last = performance.now(), acc = 0;
+let fpsAvg = 60, msAvg = 0;
+
+function loop(t) {
+  requestAnimationFrame(loop);
+  const raw = (t - last) / 1000; last = t; tNow = t;
+  const dt = Math.min(raw, 1 / 30);
+  const t0 = performance.now();
+
+  if (!paused) {
+    if (gridDirty) bakeGrid();
+    ensurePopulation();
+    acc += dt;
+    let steps = 0;
+    while (acc >= SUB && steps < MAXSUB) { physics(SUB); acc -= SUB; steps++; }
+    if (acc > SUB * MAXSUB) acc = 0;
+  } else if (gridDirty) bakeGrid();
+
+  render(dt);
+  frame++;
+
+  const ms = performance.now() - t0;
+  msAvg += (ms - msAvg) * 0.08;
+  fpsAvg += (1 / Math.max(raw, 1e-4) - fpsAvg) * 0.08;
+
+  // auto-quality: this runs on machines I can't profile, so let the frame
+  // budget decide how much light the plane can afford
+  if (CFG.autoQuality && frame > 90 && (frame % 30) === 0) {
+    if (msAvg > 13.5 && autoCap > 250) autoCap = Math.max(250, Math.floor(autoCap * 0.85));
+    else if (msAvg < 7 && autoCap < CFG.count) autoCap = Math.min(CFG.count, Math.floor(autoCap * 1.08) + 60);
+  }
+
+  if (CFG.showStats && (frame & 15) === 0) {
+    const capped = CFG.autoQuality && autoCap < CFG.count;
+    statsEl.textContent =
+      `${fpsAvg.toFixed(0)} fps · ${msAvg.toFixed(1)} ms\n` +
+      `${n}${capped ? '/' + CFG.count + ' (auto)' : ''} particles\n` +
+      `${segCount} segs · ${fields.length} fields`;
+  }
+}
+
+/* ============================================================
+   9. TOOLS & POINTER INPUT
+   ============================================================ */
+
+const TOOLS = [
+  { id: 'attract', name: 'Attract', ico: '◉', key: '1' },
+  { id: 'repel',   name: 'Repel',   ico: '◎', key: '2' },
+  { id: 'vortex',  name: 'Vortex',  ico: '✺', key: '3' },
+  { id: 'wall',    name: 'Wall',    ico: '╱', key: '4' },
+  { id: 'shape',   name: 'Shape',   ico: '⬠', key: '5' },
+  { id: 'flow',    name: 'Flow',    ico: '≈', key: '6' },
+  { id: 'emit',    name: 'Emit',    ico: '⛲', key: '7' },
+  { id: 'blast',   name: 'Blast',   ico: '✷', key: '8' },
+  { id: 'erase',   name: 'Erase',   ico: '⌫', key: '9' },
+  { id: 'grab',    name: 'Grab',    ico: '✥', key: '0' }
+];
+let tool = 'attract';
+let submode = 'solid';       // for the Shape tool
+let draft = null;            // in-progress freehand points
+let aim = null;              // emitter aim anchor
+let grabbed = null;          // {obj, kind}
+let downAt = 0, downX = 0, downY = 0, moved = 0;
+let uiHidden = false;
+
+function pushHistory(type, id) { history.push({ type, id }); if (history.length > 60) history.shift(); }
+
+function addPointToDraft(x, y) {
+  const L = draft.length;
+  if (L >= 2) {
+    const dx = x - draft[L - 2], dy = y - draft[L - 1];
+    if (dx * dx + dy * dy < 49) return;    // 7px decimation
+  }
+  draft.push(x, y);
+}
+
+function finishDraft() {
+  if (!draft) return;
+  const p = draft; draft = null;
+  if (p.length < 4) return;
+
+  if (tool === 'wall') {
+    walls.push({ id: nextId++, pts: p, closed: false });
+    pushHistory('wall', walls[walls.length - 1].id);
+    rebuildSegments(); structDirty = true;
+  } else if (tool === 'shape') {
+    if (submode === 'solid') {
+      walls.push({ id: nextId++, pts: p, closed: true });
+      pushHistory('wall', walls[walls.length - 1].id);
+      rebuildSegments(); structDirty = true;
+    } else {
+      const c = polyCentroid(p);
+      fields.push({ id: nextId++, kind: 'poly', mode: submode, pts: p, cx: c[0], cy: c[1], bb: polyBBox(p), strength: 1 });
+      pushHistory('field', fields[fields.length - 1].id);
+      gridDirty = true; structDirty = true;
+    }
+  } else if (tool === 'flow') {
+    fields.push({ id: nextId++, kind: 'flow', mode: 'flow', pts: p, r: CFG.brush, bb: polyBBox(p), strength: 1 });
+    const f = fields[fields.length - 1];
+    const c = polyCentroid(p); f.cx = c[0]; f.cy = c[1];
+    pushHistory('field', f.id);
+    gridDirty = true; structDirty = true;
+  }
+  save();
+}
+
+function placeWell(x, y, mode) {
+  fields.push({ id: nextId++, kind: 'well', mode, x, y, r: Math.max(50, CFG.brush * 1.6), strength: 1, cx: x, cy: y });
+  pushHistory('field', fields[fields.length - 1].id);
+  gridDirty = true; structDirty = true; save();
+}
+
+function eraseAt(x, y, r) {
+  const r2 = r * r;
+  const near = (pts) => {
+    for (let i = 0; i < pts.length; i += 2) {
+      const dx = pts[i] - x, dy = pts[i + 1] - y;
+      if (dx * dx + dy * dy < r2) return true;
+    }
+    return false;
+  };
+  const w0 = walls.length, f0 = fields.length, e0 = emitters.length;
+  walls = walls.filter(w => !near(w.pts));
+  fields = fields.filter(f => {
+    if (f.kind === 'well') { const dx = f.x - x, dy = f.y - y; return dx * dx + dy * dy > (r + f.r * 0.35) ** 2; }
+    return !near(f.pts);
+  });
+  emitters = emitters.filter(e => (e.x - x) ** 2 + (e.y - y) ** 2 > r2);
+  if (walls.length !== w0) { rebuildSegments(); structDirty = true; }
+  if (fields.length !== f0) { gridDirty = true; structDirty = true; }
+  if (emitters.length !== e0) structDirty = true;
+}
+
+function pickAt(x, y, r) {
+  const r2 = r * r;
+  for (const e of emitters) if ((e.x - x) ** 2 + (e.y - y) ** 2 < r2) return { obj: e, kind: 'emitter' };
+  for (let i = fields.length - 1; i >= 0; i--) {
+    const f = fields[i];
+    if (f.kind === 'well') { if ((f.x - x) ** 2 + (f.y - y) ** 2 < Math.max(r2, f.r * f.r * 0.3)) return { obj: f, kind: 'field' }; }
+    else { for (let k = 0; k < f.pts.length; k += 2) if ((f.pts[k] - x) ** 2 + (f.pts[k + 1] - y) ** 2 < r2) return { obj: f, kind: 'field' }; }
+  }
+  for (let i = walls.length - 1; i >= 0; i--) {
+    const w = walls[i];
+    for (let k = 0; k < w.pts.length; k += 2)
+      if ((w.pts[k] - x) ** 2 + (w.pts[k + 1] - y) ** 2 < r2) return { obj: w, kind: 'wall' };
+  }
+  return null;
+}
+
+function translateObj(g, dx, dy) {
+  const o = g.obj;
+  if (g.kind === 'emitter') { o.x += dx; o.y += dy; return; }
+  if (g.kind === 'field' && o.kind === 'well') { o.x += dx; o.y += dy; o.cx += dx; o.cy += dy; gridDirty = true; structDirty = true; return; }
+  for (let i = 0; i < o.pts.length; i += 2) { o.pts[i] += dx; o.pts[i + 1] += dy; }
+  if (g.kind === 'field') { o.cx += dx; o.cy += dy; o.bb = polyBBox(o.pts); gridDirty = true; }
+  else rebuildSegments();
+  structDirty = true;
+}
+
+// ---- pointer plumbing ---------------------------------------------
+function toLocal(e) { return [e.clientX, e.clientY]; }
+
+stage.addEventListener('contextmenu', e => e.preventDefault());
+
+stage.addEventListener('pointerdown', e => {
+  if (pointer.id !== -1) return;
+  stage.setPointerCapture(e.pointerId);
+  pointer.id = e.pointerId; pointer.down = true; pointer.button = e.button;
+  const [x, y] = toLocal(e);
+  pointer.x = pointer.px = downX = x; pointer.y = pointer.py = downY = y;
+  downAt = performance.now(); moved = 0;
+  dismissHint();
+
+  if (e.button === 2) { liveForce = { x, y, mode: 'repel', r: CFG.brush * 1.7 }; return; }
+
+  switch (tool) {
+    case 'attract': case 'repel': case 'vortex':
+      liveForce = { x, y, mode: tool, r: CFG.brush * 1.7 }; break;
+    case 'wall': case 'shape': case 'flow':
+      draft = [x, y]; break;
+    case 'emit':
+      aim = { x, y }; break;
+    case 'blast':
+      shockwave(x, y, CFG.brush * 2.4, 900); break;
+    case 'erase':
+      eraseAt(x, y, CFG.brush); break;
+    case 'grab':
+      grabbed = pickAt(x, y, CFG.brush); break;
+  }
+});
+
+stage.addEventListener('pointermove', e => {
+  const [x, y] = toLocal(e);
+  if (e.pointerId !== pointer.id && pointer.id !== -1) { pointer.x = x; pointer.y = y; return; }
+  pointer.px = pointer.x; pointer.py = pointer.y;
+  pointer.x = x; pointer.y = y;
+  if (!pointer.down) return;
+  moved += Math.hypot(x - pointer.px, y - pointer.py);
+
+  if (liveForce) { liveForce.x = x; liveForce.y = y; }
+  else if (draft) addPointToDraft(x, y);
+  else if (tool === 'erase') eraseAt(x, y, CFG.brush);
+  else if (tool === 'blast' && moved > CFG.brush) { shockwave(x, y, CFG.brush * 2.4, 700); moved = 0; }
+  else if (grabbed) translateObj(grabbed, x - pointer.px, y - pointer.py);
+});
+
+function endPointer(e) {
+  if (e.pointerId !== pointer.id) return;
+  const [x, y] = toLocal(e);
+  const quick = performance.now() - downAt < 240 && Math.hypot(x - downX, y - downY) < 10;
+
+  if (liveForce) {
+    // a tap (rather than a drag) pins the force in place permanently
+    if (quick && pointer.button !== 2 && ['attract', 'repel', 'vortex'].includes(tool)) placeWell(x, y, tool);
+    liveForce = null;
+  }
+  if (draft) finishDraft();
+  if (aim) {
+    let a = Math.atan2(y - aim.y, x - aim.x);
+    if (quick) a = -Math.PI / 2;
+    emitters.push({ id: nextId++, x: aim.x, y: aim.y, a, spread: 0.5, rate: 105, speed: 340, acc: 0 });
+    pushHistory('emitter', emitters[emitters.length - 1].id);
+    aim = null; save();
+  }
+  if (grabbed) { grabbed = null; save(); }
+  if (tool === 'erase') save();
+
+  pointer.down = false; pointer.id = -1; pointer.button = 0;
+}
+stage.addEventListener('pointerup', endPointer);
+stage.addEventListener('pointercancel', endPointer);
+
+/* ============================================================
+   10. UI WIRING
+   ============================================================ */
+
+const toolsEl = document.getElementById('tools');
+const subEl = document.getElementById('submodes');
+const panel = document.getElementById('panel');
+const gear = document.getElementById('gear');
+const statsEl = document.getElementById('stats');
+const hintEl = document.getElementById('hint');
+const toastEl = document.getElementById('toast');
+const uiEl = document.getElementById('ui');
+
+toolsEl.innerHTML = TOOLS.map(t =>
+  `<button class="tool" data-tool="${t.id}"><span class="key">${t.key}</span><span class="ico">${t.ico}</span>${t.name}</button>`
+).join('');
+
+function setTool(id) {
+  tool = id;
+  for (const b of toolsEl.children) b.classList.toggle('on', b.dataset.tool === id);
+  subEl.classList.toggle('show', id === 'shape');
+}
+toolsEl.addEventListener('click', e => {
+  const b = e.target.closest('.tool'); if (b) setTool(b.dataset.tool);
+});
+subEl.addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  submode = b.dataset.sub;
+  for (const c of subEl.children) c.classList.toggle('on', c.dataset.sub === submode);
+});
+
+gear.addEventListener('click', () => panel.classList.toggle('show'));
+document.getElementById('closePanel').addEventListener('click', () => panel.classList.remove('show'));
+
+// generic slider binding
+const sliders = [...document.querySelectorAll('input[data-cfg]')];
+for (const s of sliders) {
+  s.addEventListener('input', () => {
+    const k = s.dataset.cfg;
+    CFG[k] = parseFloat(s.value);
+    if (k === 'glow') buildSprites();
+    if (k === 'fieldStrength') gridDirty = true;
+    if (k === 'brush') structDirty = true;
+    if (k === 'count') autoCap = CFG.count;   // asking for more light lifts the governor
+    syncLabels(); save();
+  });
+}
+
+document.querySelectorAll('.sw').forEach(sw => {
+  sw.addEventListener('click', () => {
+    const k = sw.dataset.toggle;
+    CFG[k] = !CFG[k];
+    sw.classList.toggle('on', CFG[k]);
+    if (k === 'showStats') statsEl.classList.toggle('show', CFG[k]);
+    if (k === 'autoQuality' && !CFG[k]) autoCap = CFG.count;
+    save();
+  });
+});
+
+document.getElementById('segBoundary').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  CFG.boundary = b.dataset.b; syncUI(); save();
+});
+
+document.querySelectorAll('[data-preset]').forEach(b =>
+  b.addEventListener('click', () => { applyPreset(b.dataset.preset); toast(b.textContent + ' loaded'); }));
+
+document.getElementById('clearParticles').addEventListener('click', () => { seedParticles(); clearTrails(); });
+document.getElementById('clearStructures').addEventListener('click', () => {
+  walls = []; fields = []; emitters = []; history = [];
+  rebuildSegments(); gridDirty = true; structDirty = true; save(); toast('Build cleared');
+});
+document.getElementById('resetAll').addEventListener('click', () => {
+  Object.assign(CFG, DEFAULTS);
+  autoCap = CFG.count;
+  walls = []; fields = []; emitters = []; history = [];
+  rebuildSegments(); buildSprites(); seedParticles(); clearTrails();
+  gridDirty = true; structDirty = true; syncUI();
+  try { localStorage.removeItem(STORE_KEY); } catch (err) {}
+  toast('Reset');
+});
+
+function syncLabels() {
+  const fmt = {
+    gravity: v => Math.round(v),
+    gravityAngle: v => Math.round(v) + '°',
+    fieldStrength: v => v.toFixed(2) + '×',
+    damping: v => v.toFixed(2),
+    count: v => Math.round(v),
+    bounce: v => v.toFixed(2),
+    friction: v => v.toFixed(2),
+    trailLen: v => v < 2 ? 'off' : Math.round(v) + ' pts',
+    glow: v => v.toFixed(2) + '×',
+    brush: v => Math.round(v) + 'px'
+  };
+  for (const s of sliders) {
+    const k = s.dataset.cfg;
+    const el = document.getElementById('v_' + k);
+    if (el) el.textContent = fmt[k] ? fmt[k](CFG[k]) : CFG[k];
+  }
+}
+
+function syncUI() {
+  for (const s of sliders) s.value = CFG[s.dataset.cfg];
+  document.querySelectorAll('.sw').forEach(sw => sw.classList.toggle('on', !!CFG[sw.dataset.toggle]));
+  document.querySelectorAll('#segBoundary button').forEach(b => b.classList.toggle('on', b.dataset.b === CFG.boundary));
+  statsEl.classList.toggle('show', CFG.showStats);
+  for (const c of subEl.children) c.classList.toggle('on', c.dataset.sub === submode);
+  syncLabels();
+}
+
+let toastT = 0;
+function toast(msg) {
+  toastEl.textContent = msg; toastEl.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 1200);
+}
+
+let hintGone = false;
+function dismissHint() { if (!hintGone) { hintGone = true; hintEl.classList.add('gone'); } }
+setTimeout(dismissHint, 11000);
+
+function clearTrails() { pctx.clearRect(0, 0, W, H); }
+
+// ---- keyboard ------------------------------------------------------
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey || e.metaKey) {
+    if (k === 'z') { e.preventDefault(); undo(); }
+    return;
+  }
+  const t = TOOLS.find(t => t.key === e.key);
+  if (t) { setTool(t.id); return; }
+  if (k === ' ') { e.preventDefault(); paused = !paused; toast(paused ? 'Paused' : 'Running'); }
+  else if (k === 'c') { seedParticles(); clearTrails(); }
+  else if (k === 'x') { document.getElementById('clearStructures').click(); }
+  else if (k === 'r') { document.getElementById('resetAll').click(); }
+  else if (k === 'h') { uiHidden = !uiHidden; uiEl.classList.toggle('hidden', uiHidden); }
+  else if (k === 'p') { document.querySelector('.sw[data-toggle="showStats"]').click(); }
+});
+
+function undo() {
+  const h = history.pop(); if (!h) return;
+  if (h.type === 'wall') { walls = walls.filter(w => w.id !== h.id); rebuildSegments(); }
+  else if (h.type === 'field') { fields = fields.filter(f => f.id !== h.id); gridDirty = true; }
+  else if (h.type === 'emitter') { emitters = emitters.filter(e => e.id !== h.id); }
+  structDirty = true; save();
+}
+
+/* ============================================================
+   11. PRESET SCENES
+   ============================================================ */
+
+function circlePts(cx, cy, r, seg) {
+  const p = [];
+  for (let i = 0; i < seg; i++) { const a = i / seg * Math.PI * 2; p.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+  return p;
+}
+
+function applyPreset(name) {
+  // presets are laid out in fractions of the viewport — building one against a
+  // 0×0 window collapses the whole scene to the origin with no way back
+  if (W < 2 || H < 2) { setTimeout(() => applyPreset(name), 120); return; }
+  walls = []; fields = []; emitters = []; history = []; rings = [];
+  const w = W, h = H;
+
+  if (name === 'funnel') {
+    CFG.gravity = 950; CFG.gravityAngle = 90; CFG.boundary = 'bounce';
+    walls.push({ id: nextId++, pts: [w * 0.06, h * 0.30, w * 0.44, h * 0.70], closed: false });
+    walls.push({ id: nextId++, pts: [w * 0.94, h * 0.30, w * 0.56, h * 0.70], closed: false });
+    walls.push({ id: nextId++, pts: [w * 0.44, h * 0.70, w * 0.44, h * 0.86], closed: false });
+    walls.push({ id: nextId++, pts: [w * 0.56, h * 0.70, w * 0.56, h * 0.86], closed: false });
+    walls.push({ id: nextId++, pts: [w * 0.20, h * 0.94, w * 0.80, h * 0.94], closed: false });
+    emitters.push({ id: nextId++, x: w * 0.5, y: h * 0.12, a: Math.PI / 2, spread: 1.5, rate: 125, speed: 180, acc: 0 });
+    fields.push({ id: nextId++, kind: 'well', mode: 'vortex', x: w * 0.5, y: h * 0.9, r: Math.min(w, h) * 0.22, strength: 0.55, cx: w * 0.5, cy: h * 0.9 });
+  }
+
+  else if (name === 'orbit') {
+    CFG.gravity = 0; CFG.boundary = 'wrap'; CFG.damping = 0.02;
+    const cx = w * 0.5, cy = h * 0.5;
+    fields.push({ id: nextId++, kind: 'well', mode: 'attract', x: cx, y: cy, r: Math.min(w, h) * 0.62, strength: 1.5, cx, cy });
+    fields.push({ id: nextId++, kind: 'well', mode: 'repel', x: cx, y: cy, r: Math.min(w, h) * 0.10, strength: 1.2, cx, cy });
+    walls.push({ id: nextId++, pts: circlePts(cx, cy, Math.min(w, h) * 0.045, 22), closed: true });
+    seedParticles();
+    swirlAll(cx, cy, 300);
+  }
+
+  else if (name === 'waterfall') {
+    CFG.gravity = 1100; CFG.gravityAngle = 90; CFG.boundary = 'open';
+    for (let i = 0; i < 5; i++) {
+      const y = h * (0.22 + i * 0.15);
+      const left = i % 2 === 0;
+      const x0 = left ? w * 0.08 : w * 0.92, x1 = left ? w * 0.62 : w * 0.38;
+      walls.push({ id: nextId++, pts: [x0, y, x1, y + h * 0.06], closed: false });
+    }
+    emitters.push({ id: nextId++, x: w * 0.12, y: h * 0.08, a: Math.PI / 2.6, spread: 0.35, rate: 155, speed: 260, acc: 0 });
+    fields.push({ id: nextId++, kind: 'flow', mode: 'flow', pts: [w * 0.1, h * 0.1, w * 0.35, h * 0.2, w * 0.2, h * 0.4], r: 70, strength: 0.5, cx: w * 0.2, cy: h * 0.25, bb: [w * 0.1, h * 0.1, w * 0.35, h * 0.4] });
+  }
+
+  else if (name === 'pinball') {
+    CFG.gravity = 1000; CFG.gravityAngle = 90; CFG.boundary = 'bounce'; CFG.bounce = 0.8;
+    const rows = 4;
+    for (let r = 0; r < rows; r++) {
+      const cols = 4 + (r % 2);
+      for (let c = 0; c < cols; c++) {
+        const x = w * ((c + (r % 2 ? 0.5 : 1)) / (cols + 1));
+        const y = h * (0.25 + r * 0.16);
+        walls.push({ id: nextId++, pts: circlePts(x, y, Math.min(w, h) * 0.028, 14), closed: true });
+        fields.push({ id: nextId++, kind: 'well', mode: 'repel', x, y, r: Math.min(w, h) * 0.075, strength: 0.5, cx: x, cy: y });
+      }
+    }
+    walls.push({ id: nextId++, pts: [w * 0.02, h * 0.92, w * 0.42, h * 0.99], closed: false });
+    walls.push({ id: nextId++, pts: [w * 0.98, h * 0.92, w * 0.58, h * 0.99], closed: false });
+    emitters.push({ id: nextId++, x: w * 0.5, y: h * 0.08, a: Math.PI / 2, spread: 2.2, rate: 100, speed: 200, acc: 0 });
+  }
+
+  for (const f of fields) if (f.pts && !f.bb) f.bb = polyBBox(f.pts);
+  rebuildSegments(); gridDirty = true; structDirty = true; clearTrails(); syncUI(); save();
+}
+
+/* ============================================================
+   12. PERSISTENCE
+   ============================================================ */
+
+let saveT = 0;
+function save() {
+  clearTimeout(saveT);
+  saveT = setTimeout(doSave, 500);
+}
+function doSave() {
+  if (W < 2 || H < 2) return;   // never persist a scene laid out on a 0-size viewport
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      v: 1, W, H, CFG, tool, submode,
+      walls: walls.map(w => ({ id: w.id, pts: Array.from(w.pts), closed: w.closed })),
+      fields: fields.map(f => {
+        const o = { id: f.id, kind: f.kind, mode: f.mode, strength: f.strength };
+        if (f.kind === 'well') { o.x = f.x; o.y = f.y; o.r = f.r; }
+        else { o.pts = Array.from(f.pts); if (f.kind === 'flow') o.r = f.r; }
+        return o;
+      }),
+      emitters: emitters.map(e => ({ id: e.id, x: e.x, y: e.y, a: e.a, spread: e.spread, rate: e.rate, speed: e.speed }))
+    }));
+  } catch (err) { /* private mode / quota — not worth interrupting play */ }
+}
+window.addEventListener('beforeunload', doSave);
+
+function load() {
+  let raw = null;
+  try { raw = localStorage.getItem(STORE_KEY); } catch (err) { return false; }
+  if (!raw) return false;
+  let d; try { d = JSON.parse(raw); } catch (err) { return false; }
+  if (!d || d.v !== 1) return false;
+
+  Object.assign(CFG, DEFAULTS, d.CFG || {});
+  CFG.count = Math.min(MAXP, Math.max(100, CFG.count | 0));
+  tool = d.tool || 'attract'; submode = d.submode || 'solid';
+
+  // rescale geometry if the window changed size since saving
+  const sx = d.W ? W / d.W : 1, sy = d.H ? H / d.H : 1;
+  const sc = (p) => { const q = p.slice(); for (let i = 0; i < q.length; i += 2) { q[i] *= sx; q[i + 1] *= sy; } return q; };
+  const sr = Math.min(sx, sy);
+
+  walls = (d.walls || []).map(w => ({ id: w.id, pts: sc(w.pts), closed: !!w.closed }));
+  fields = (d.fields || []).map(f => {
+    if (f.kind === 'well') return { id: f.id, kind: 'well', mode: f.mode, x: f.x * sx, y: f.y * sy, r: f.r * sr, strength: f.strength, cx: f.x * sx, cy: f.y * sy };
+    const pts = sc(f.pts);
+    const c = polyCentroid(pts);
+    return { id: f.id, kind: f.kind, mode: f.mode, pts, r: (f.r || 60) * sr, strength: f.strength, cx: c[0], cy: c[1], bb: polyBBox(pts) };
+  });
+  emitters = (d.emitters || []).map(e => ({ id: e.id, x: e.x * sx, y: e.y * sy, a: e.a, spread: e.spread, rate: e.rate, speed: e.speed, acc: 0 }));
+
+  nextId = 1;
+  for (const a of [walls, fields, emitters]) for (const o of a) nextId = Math.max(nextId, o.id + 1);
+  return true;
+}
+
+/* ============================================================
+   13. BOOT
+   ============================================================ */
+
+function boot() {
+  resize();
+  // a hidden pane / collapsed container reports 0×0 — wait for real dimensions
+  // rather than laying the whole scene out at the origin
+  if (W < 2 || H < 2) { setTimeout(boot, 120); return; }
+
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    DEFAULTS.count = 650; DEFAULTS.bloom = false;
+    CFG.count = 650; CFG.bloom = false;
+  }
+  load();                 // restores a saved build, if there is one
+  autoCap = CFG.count;
+  buildSprites();
+  seedParticles();
+  rebuildSegments();
+  setTool(tool);
+  syncUI();
+  // first run opens on empty space — the scenes are opt-in from the panel
+  gridDirty = true; structDirty = true;
+  requestAnimationFrame(loop);
+}
+boot();
+</script>
+</body>
 </html>
